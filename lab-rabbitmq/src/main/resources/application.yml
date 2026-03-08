@@ -1,0 +1,4 @@
+rabbitmq:
+  queue: order.queue
+  exchange: order.exchange
+  routing-key: order.routing.key
