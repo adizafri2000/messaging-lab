@@ -1,4 +1,14 @@
+spring:
+  rabbitmq:
+    listener:
+      simple:
+        default-requeue-rejected: false # If a listener throws an exception, reject the message (don't retry indefinitely)
+
 rabbitmq:
   queue: order.queue
   exchange: order.exchange
   routing-key: order.routing.key
+  dlq:
+    queue: order.queue.dlq
+    exchange: order.exchange.dlx
+    routing-key: order.routing.key.dlq
