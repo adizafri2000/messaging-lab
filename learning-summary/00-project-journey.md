@@ -1,93 +1,77 @@
 # Project Journey: From Zero to Resilient Messaging
 
 **Date:** March 2026
-**Scope:** Phase 1 (Basics) & Phase 2 (Reliability)
+**Scope:** Phase 1 (Basics), Phase 2 (Reliability), Phase 3 (Patterns)
 
 ---
 
 ## 🏗️ Phase 1: The Foundation
 **Goal:** Get two parts of an application to talk to each other asynchronously using RabbitMQ.
-
-### 1. Project Structure (Multi-Module)
-We avoided the common mistake of putting everything in one bucket.
-*   **`lab-common`**: Contains shared data models (`OrderEvent`). This ensures the Producer and Consumer speak the same language.
-*   **`lab-rabbitmq`**: The Spring Boot application containing both the Producer and Consumer logic.
-*   **`compose.yml`**: Infrastructure as Code. We spun up RabbitMQ (with Management UI) and Kafka using Docker, ensuring a clean environment.
-
-### 2. The Core Messaging Flow
-We implemented a **Point-to-Point** pattern:
-1.  **Trigger:** User hits `POST /api/rabbit/send`.
-2.  **Producer:** `RabbitProducer` takes the data, wraps it in an `OrderEvent`, and sends it to the Exchange.
-3.  **Router:** The `TopicExchange` uses a Routing Key (`order.routing.key`) to deliver the message to the correct Queue (`order.queue`).
-4.  **Consumer:** `RabbitConsumer` listens to the queue and processes the message.
-
-### 3. Serialization (JSON vs. Java)
-*   **Initial thought:** Use `Serializable` (Java Native Serialization).
-*   **Decision:** We removed `Serializable` and switched to **JSON** using `Jackson2JsonMessageConverter`.
-*   **Why?** JSON is language-agnostic, readable, and safer than Java deserialization.
+*(Details: Multi-module setup, Core Point-to-Point flow, JSON serialization)*
 
 ---
 
 ## 🛡️ Phase 2: Reliability & Resilience
 **Goal:** Ensure the system survives bad data and application crashes.
-
-### 1. The "Poison Pill" Problem
-We simulated a scenario where a message causes the consumer to crash (throw an exception).
-*   **Observation:** By default, Spring AMQP puts the failed message back at the front of the queue (`requeue=true`).
-*   **Result:** The app entered an **Infinite Retry Loop**, processing the same crashing message thousands of times per second.
-
-### 2. The Solution: Dead Letter Queue (DLQ)
-We architected a safety net to catch failed messages.
-
-#### A. Infrastructure Changes (`RabbitConfig.java`)
-We redefined our main queue to include "instructions for failure":
-```java
-QueueBuilder.durable(queueName)
-    .withArgument("x-dead-letter-exchange", dlxName)
-    .withArgument("x-dead-letter-routing-key", dlqRoutingKey)
-    .build();
-```
-
-#### B. Configuration Changes (`application.yml`)
-We told Spring to stop the infinite loop:
-```yaml
-spring:
-  rabbitmq:
-    listener:
-      simple:
-        default-requeue-rejected: false # Reject -> Send to DLQ
-```
-
-#### C. Handling the Dead Letters
-We added a second listener in `RabbitConsumer` specifically for the DLQ.
-*   **Main Listener:** Processes orders. If it fails -> throws exception.
-*   **DLQ Listener:** Receives the failed order, logs it, and safely removes it from the flow.
+*(Details: Handled "Poison Pill" with DLQ, Handled "Transient Blips" with Spring Retry)*
 
 ---
 
-## 🧩 Current Architecture Diagram
+## 📡 Phase 3: Messaging Patterns
+**Goal:** Move beyond simple 1-to-1 messaging.
+
+### 1. The Pub/Sub Pattern (Fanout Exchange)
+We needed one event ("Order Placed") to trigger multiple independent actions (Process Order + Send Email).
+*   **Solution:** We used a `FanoutExchange` to broadcast a single message to both an `order.queue` and an `email.queue`.
+
+### 2. The Competing Consumers Pattern (Scaling)
+We needed to handle high message load for the Order Service. A single consumer couldn't keep up.
+
+#### A. The Problem
+When message volume is high, a single consumer thread processing messages one-by-one becomes a bottleneck, leading to delays.
+
+#### B. The Solution: Parallel Consumers
+We scaled the Order Service by having multiple consumers work on the same queue.
+*   **How it works:** RabbitMQ automatically distributes messages from a single queue among all connected consumers in a round-robin fashion.
+*   **Implementation:** We added the `concurrency="3"` property to the `@RabbitListener` annotation for the Order Service. This tells Spring to create 3 consumer threads, all listening to `order.queue`.
+*   **Result:** The application can now process up to 3 orders from the queue in parallel, dramatically increasing throughput.
+
+---
+
+## 🧩 Current Architecture Diagram (Scaling)
 
 ```mermaid
-graph LR
+graph TD
     User[User HTTP] -->|POST| Controller
     Controller -->|Send| Producer
     
     subgraph RabbitMQ
-        Exchange[Order Exchange]
-        Queue[Order Queue]
-        DLX[DLX Exchange]
-        DLQ[Dead Letter Queue]
+        Fanout[Fanout Exchange]
+        OrderQ[Order Queue]
+        EmailQ[Email Queue]
     end
     
-    Producer -->|JSON| Exchange
-    Exchange -->|Routing Key| Queue
+    Producer -->|JSON| Fanout
     
-    Queue -->|Consume| ConsumerApp
+    Fanout --> OrderQ
+    Fanout --> EmailQ
     
-    ConsumerApp -- Success --> Done
-    ConsumerApp -- Exception --> Queue
+    subgraph "Order Service (Scaled)"
+        OrderQ --> C1[Consumer 1]
+        OrderQ --> C2[Consumer 2]
+        OrderQ --> C3[Consumer 3]
+    end
+
+    EmailQ -->|Consume| EmailService[Email Service Consumer]
     
-    Queue -- Rejection (x-dead-letter) --> DLX
-    DLX --> DLQ
-    DLQ -->|Consume| DLQ_Listener[DLQ Handler]
+    C1 & C2 & C3 --> ErrorHandler{Error Handling}
+    
+    subgraph "Error Handling Logic"
+        direction LR
+        ErrorHandler -- Fails --> Retry[Retry]
+        Retry -- Retries < 3 --> Handled
+        Retry -- Retries Exhausted --> DLX[DLX]
+        DLX --> DLQ[DLQ]
+        DLQ --> DLQ_Handler[DLQ Handler]
+    end
 ```

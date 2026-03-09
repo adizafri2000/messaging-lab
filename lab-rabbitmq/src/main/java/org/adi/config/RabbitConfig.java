@@ -12,6 +12,9 @@ public class RabbitConfig {
     @Value("${rabbitmq.queue}")
     private String queueName;
 
+    @Value("${rabbitmq.email-queue}")
+    private String emailQueueName;
+
     @Value("${rabbitmq.exchange}")
     private String exchangeName;
 
@@ -36,7 +39,7 @@ public class RabbitConfig {
 
     @Bean
     public Queue deadLetterQueue() {
-        return new Queue(dlqName); // DLQs are durable by default
+        return new Queue(dlqName);
     }
 
     @Bean
@@ -44,28 +47,44 @@ public class RabbitConfig {
         return BindingBuilder.bind(deadLetterQueue).to(deadLetterExchange).with(dlqRoutingKey);
     }
 
-    // 1. Define the Queue (The Bucket)
+    // --- Main Order Processing Infrastructure ---
+
     @Bean
-    public Queue queue() {
+    public Queue orderQueue() {
         return QueueBuilder.durable(queueName)
                 .withArgument("x-dead-letter-exchange", dlxName)
                 .withArgument("x-dead-letter-routing-key", dlqRoutingKey)
                 .build();
     }
 
-    // 2. Define the Exchange (The Router)
+    // --- Email Notification Infrastructure ---
+
     @Bean
-    public TopicExchange exchange() {
-        return new TopicExchange(exchangeName);
+    public Queue emailQueue() {
+        return new Queue(emailQueueName, true); // durable=true
     }
 
-    // 3. Bind them together with a Routing Key
+    // --- Fanout Exchange (The Broadcaster) ---
+
     @Bean
-    public Binding binding(Queue queue, TopicExchange exchange) {
-        return BindingBuilder.bind(queue).to(exchange).with(routingKey);
+    public FanoutExchange fanoutExchange() {
+        return new FanoutExchange(exchangeName);
     }
 
-    // 4. IMPORTANT: Convert Java Objects to JSON automatically
+    // --- Bindings ---
+
+    @Bean
+    public Binding orderBinding(Queue orderQueue, FanoutExchange fanoutExchange) {
+        return BindingBuilder.bind(orderQueue).to(fanoutExchange);
+    }
+
+    @Bean
+    public Binding emailBinding(Queue emailQueue, FanoutExchange fanoutExchange) {
+        return BindingBuilder.bind(emailQueue).to(fanoutExchange);
+    }
+
+    // --- JSON Converter ---
+
     @Bean
     public Jackson2JsonMessageConverter jsonMessageConverter() {
         return new Jackson2JsonMessageConverter();

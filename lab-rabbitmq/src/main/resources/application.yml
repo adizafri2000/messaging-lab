@@ -2,10 +2,16 @@ spring:
   rabbitmq:
     listener:
       simple:
-        default-requeue-rejected: false # If a listener throws an exception, reject the message (don't retry indefinitely)
+        default-requeue-rejected: false # After retries fail, send to DLQ (don't requeue)
+        retry:
+          enabled: true
+          initial-interval: 2s # Start with a 2-second delay
+          max-attempts: 3       # Try a total of 3 times
+          multiplier: 1.5       # Increase delay by 50% each time (optional, good for backoff)
 
 rabbitmq:
   queue: order.queue
+  email-queue: email.queue # New queue for the email service
   exchange: order.exchange
   routing-key: order.routing.key
   dlq:
