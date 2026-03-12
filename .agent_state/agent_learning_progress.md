@@ -1,6 +1,10 @@
 # Agent's Learning Progress Tracker
 
-This file is for the agent's internal state management and should not be edited manually.
+This file is for the agent's internal state management and should not be edited manually. Especially for the learning 
+summaries, the contents is best to be **appended**. If need to modify existing content, then a content restructuring may
+be required when necessary. This is so that when learning new stuff, the existing knowledge does not get simply lost
+due to writing the new knowledge contents only. The user wants a learning summary, so it should contain the summaries of 
+all learning parts throughout the study and not only recent ones.
 
 ## User's Reference Documents
 - `C:/Users/adizafri/Documents/rah/messaging-lab/LEARNING_PLAN.md`
@@ -9,16 +13,19 @@ This file is for the agent's internal state management and should not be edited 
 ## Current Status (as of last interaction)
 
 ### Last Completed Milestone
-- **Phase:** Messaging Patterns (RabbitMQ)
-- **Achievement:** Successfully implemented and understood two core messaging patterns.
-  - **1. Publish/Subscribe:** Used a `FanoutExchange` to broadcast a single message to multiple, independent consumer queues (`order.queue` and `email.queue`).
-  - **2. Competing Consumers:** Scaled the `Order Service` by setting `concurrency=3` on the `@RabbitListener`, allowing for parallel processing of messages from a single queue.
-- **Evidence:** Documented in `00-project-journey.md`.
+- **Phase:** Introduction to Kafka
+- **Achievement:** Successfully set up the `lab-kafka` module and implemented a basic Kafka Producer and Consumer.
+  - **Module Setup:** Created `lab-kafka` with `pom.xml` and updated parent `pom.xml`.
+  - **Configuration:** Created `application.yml` with Kafka broker settings, including correct deserialization.
+  - **Producer:** Implemented `KafkaProducer` using `KafkaTemplate` and `KafkaController` for HTTP trigger.
+  - **Consumer:** Implemented `KafkaConsumer` using `@KafkaListener`.
+  - **Testing:** Successfully tested end-to-end flow, and logs were explained.
+  - **Documentation:** `00-project-journey.md` updated with Kafka concepts, code changes, and diagrams.
+- **Evidence:** Code files created in `lab-kafka/src/main/java/org/adi/`, `application.yml` updated, and `00-project-journey.md` reflects these changes.
 
 ### Current Active Topic
-- **Phase:** Messaging Patterns (RabbitMQ) - COMPLETED
+- **Phase:** Introduction to Kafka - COMPLETED
 
 ### Next Action
-- **Phase 3: Introduction to Kafka**
-- **Goal:** Begin the transition to understanding Kafka's log-based paradigm.
-- **First Task:** As per `LEARNING_PLAN.md`, the next step is to set up a new `lab-kafka` Maven module parallel to `lab-rabbitmq`.
+- **Phase 4: Advanced Kafka**
+- **First Task:** As per `LEARNING_PLAN.md`, the next step is to explore **Consumer Groups**.

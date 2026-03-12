@@ -19,6 +19,7 @@
     <modules>
         <module>lab-common</module>
         <module>lab-rabbitmq</module>
+        <module>lab-kafka</module>
     </modules>
 
     <properties>
